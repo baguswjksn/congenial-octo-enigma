@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timeblock</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e0e0e;
+    --surface: #161616;
+    --border: #252525;
+    --text: #f0f0f0;
+    --muted: #555;
+    --slot-h: 32px;       /* height of one 10-min slot */
+    --gap: 1px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px 120px;
+    user-select: none;
+  }
+
+  header {
+    width: 100%;
+    max-width: 580px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 40px;
+  }
+
+  h1 {
+    font-family: 'DM Mono', monospace;
+    font-weight: 300;
+    font-size: 15px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  #clock {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+  }
+
+  .day-nav {
+    width: 100%;
+    max-width: 580px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+
+  .day-nav button {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    width: 28px; height: 28px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: color 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+  }
+
+  .day-nav button:hover { color: var(--text); border-color: #444; }
+
+  #day-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    flex: 1;
+  }
+
+  /* ── Grid ── */
+  /*
+    The grid uses CSS Grid with 144 rows, each var(--slot-h) tall.
+    Column 1: time labels (48px)
+    Column 2: event area
+  */
+  .grid-wrap {
+    width: 100%;
+    max-width: 580px;
+    position: relative;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    grid-template-rows: repeat(144, var(--slot-h));
+    gap: 0 10px;
+    position: relative;
+  }
+
+  /* Time labels — one per slot but only show on :00 and :30 */
+  .t-label {
+    grid-column: 1;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: transparent;
+    text-align: right;
+    padding-top: 7px;
+    letter-spacing: 0.03em;
+    line-height: 1;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .t-label.hour  { font-size: 11px; color: #666; }
+  .t-label.half  { font-size: 9px;  color: #333; }
+
+  /* Slot hit areas — invisible, behind events, capture mouse */
+  .slot-cell {
+    grid-column: 2;
+    cursor: crosshair;
+    position: relative;
+    border-top: 1px solid transparent;
+  }
+  .slot-cell.hour-line { border-top-color: #222; }
+  .slot-cell.now-line  { border-top: 2px solid var(--text); }
+
+  /* Drag preview */
+  .drag-preview {
+    position: absolute;
+    left: 0; right: 0;
+    background: #1a2a1a;
+    border: 1px dashed #3a5a3a;
+    pointer-events: none;
+    z-index: 5;
+    display: none;
+  }
+
+  /* ── Events (the real blocks) ── */
+  .event {
+    position: absolute;
+    left: 58px;               /* 48px labels + 10px gap */
+    right: 0;
+    background: #181818;
+    border: 1px solid #2e2e2e;
+    border-left: 2px solid #505050;
+    padding: 6px 10px;
+    cursor: pointer;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 3px;
+    transition: border-color 0.12s, background 0.12s;
+    overflow: hidden;
+  }
+
+  .event:hover {
+    border-color: #444;
+    border-left-color: #888;
+    background: #1d1d1d;
+  }
+
+  .event-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .event-time {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+
+  .event-note {
+    font-size: 10px;
+    color: #555;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Current time line */
+  .now-bar {
+    position: absolute;
+    left: 48px;
+    right: 0;
+    height: 1px;
+    background: var(--text);
+    z-index: 20;
+    pointer-events: none;
+  }
+
+  .now-bar::before {
+    content: '';
+    position: absolute;
+    left: 10px;
+    top: -3px;
+    width: 6px; height: 6px;
+    background: var(--text);
+    border-radius: 50%;
+  }
+
+  /* ── Edit Panel ── */
+  .panel {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: #111;
+    border-top: 1px solid var(--border);
+    padding: 16px 20px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transform: translateY(100%);
+    transition: transform 0.2s ease;
+    z-index: 200;
+  }
+  .panel.open { transform: translateY(0); }
+
+  .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+
+  .panel-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  .panel-close {
+    background: none; border: none;
+    color: var(--muted); cursor: pointer;
+    font-size: 18px; line-height: 1; padding: 0 2px;
+    transition: color 0.15s;
+  }
+  .panel-close:hover { color: var(--text); }
+
+  .panel input, .panel textarea {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 9px 12px;
+    outline: none; resize: none;
+    transition: border-color 0.15s;
+    width: 100%; max-width: 540px; align-self: center;
+  }
+  .panel input::placeholder,
+  .panel textarea::placeholder { color: #3a3a3a; }
+  .panel input:focus, .panel textarea:focus { border-color: #404040; }
+
+  .panel-actions {
+    display: flex; gap: 8px; justify-content: center;
+  }
+
+  .btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 7px 18px; cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .btn:hover { color: var(--text); border-color: #444; }
+  .btn.primary { color: var(--text); border-color: #404040; }
+  .btn.danger:hover { color: #f55; border-color: #f55; }
+
+  /* hint */
+  .hint {
+    width: 100%;
+    max-width: 580px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: #2a2a2a;
+    margin-bottom: 14px;
+    letter-spacing: 0.04em;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Timeblock</h1>
+  <span id="clock">--:--:--</span>
+</header>
+
+<div class="day-nav">
+  <button id="prev-day">‹</button>
+  <span id="day-label"></span>
+  <button id="next-day">›</button>
+</div>
+
+<p class="hint">click a slot for 10 min · drag to create a block · click block to edit</p>
+
+<div class="grid-wrap">
+  <div class="grid" id="grid"></div>
+  <div class="drag-preview" id="drag-preview"></div>
+  <div class="now-bar" id="now-bar"></div>
+</div>
+
+<!-- Edit / Create panel -->
+<div class="panel" id="panel">
+  <div class="panel-header">
+    <span class="panel-meta" id="panel-meta"></span>
+    <button class="panel-close" id="panel-close">×</button>
+  </div>
+  <input  type="text" id="p-title" placeholder="What are you doing?" maxlength="100" autocomplete="off">
+  <textarea id="p-note" placeholder="Notes…" rows="2"></textarea>
+  <div class="panel-actions">
+    <button class="btn danger" id="p-delete">Delete</button>
+    <button class="btn primary" id="p-save">Save</button>
+  </div>
+</div>
+
+<script>
+  const TOTAL = 144;        // slots per day
+  const SLOT_H = 32;        // px — must match --slot-h
+  const GAP    = 1;         // px gap between rows (none here, rows are tight)
+
+  let dayOffset = 0;
+  let events    = [];       // [{id, start_slot, span, title, note}]
+
+  // drag state
+  let dragActive = false;
+  let dragAnchor = null;    // slot index where drag started
+  let dragCurrent = null;
+
+  // edit state
+  let editingId = null;     // null = creating new
+  let pendingSlot = null;   // for new event
+  let pendingSpan = null;
+
+  // ── Helpers ────────────────────────────────────────────────────────────
+
+  function dateStr(off = dayOffset) {
+    const d = new Date();
+    d.setDate(d.getDate() + off);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function slotToHM(s) {
+    const m = s * 10;
+    return { h: Math.floor(m / 60), m: m % 60 };
+  }
+
+  function fmt(s) {
+    const { h, m } = slotToHM(s);
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  }
+
+  function fmtHour(h) {
+    return `${h % 12 || 12}${h < 12 ? 'am' : 'pm'}`;
+  }
+
+  function slotY(s) {
+    return s * (SLOT_H + 0);  // gap=0 between rows
+  }
+
+  function nowSlot() {
+    const n = new Date();
+    return Math.floor((n.getHours() * 60 + n.getMinutes()) / 10);
+  }
+
+  function nowFraction() {
+    const n = new Date();
+    return (n.getHours() * 3600 + n.getMinutes() * 60 + n.getSeconds()) / (24 * 3600);
+  }
+
+  // check if a slot range overlaps any existing event (excluding editingId)
+  function overlaps(startSlot, span, excludeId = null) {
+    const end = startSlot + span;
+    return events.some(ev => {
+      if (ev.id === excludeId) return false;
+      return startSlot < ev.start_slot + ev.span && end > ev.start_slot;
+    });
+  }
+
+  // ── API ───────────────────────────────────────────────────────────────
+
+  async function loadDay() {
+    const r = await fetch(`/api/day/${dateStr()}`);
+    events = await r.json();
+  }
+
+  async function createEvent(start_slot, span, title, note) {
+    const r = await fetch('/api/event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: dateStr(), start_slot, span, title, note })
+    });
+    const j = await r.json();
+    return j.id;
+  }
+
+  async function updateEvent(id, patch) {
+    await fetch(`/api/event/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    });
+  }
+
+  async function deleteEvent(id) {
+    await fetch(`/api/event/${id}`, { method: 'DELETE' });
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────
+
+  function renderDayLabel() {
+    const d = new Date();
+    d.setDate(d.getDate() + dayOffset);
+    const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    let lbl;
+    if (dayOffset === 0)       lbl = `Today — ${DAYS[d.getDay()]}, ${MONS[d.getMonth()]} ${d.getDate()}`;
+    else if (dayOffset === 1)  lbl = `Tomorrow — ${DAYS[d.getDay()]}, ${MONS[d.getMonth()]} ${d.getDate()}`;
+    else if (dayOffset === -1) lbl = `Yesterday — ${DAYS[d.getDay()]}, ${MONS[d.getMonth()]} ${d.getDate()}`;
+    else lbl = `${DAYS[d.getDay()]}, ${MONS[d.getMonth()]} ${d.getDate()} ${d.getFullYear()}`;
+    document.getElementById('day-label').textContent = lbl;
+  }
+
+  function renderGrid() {
+    const grid = document.getElementById('grid');
+    grid.innerHTML = '';
+
+    for (let s = 0; s < TOTAL; s++) {
+      const { h, m } = slotToHM(s);
+
+      // Time label
+      const lbl = document.createElement('div');
+      if (m === 0) {
+        lbl.className = 't-label hour';
+        lbl.textContent = fmtHour(h);
+      } else if (m === 30) {
+        lbl.className = 't-label half';
+        lbl.textContent = `${String(h).padStart(2,'0')}:30`;
+      } else {
+        lbl.className = 't-label';
+      }
+      lbl.style.gridRow = s + 1;
+      grid.appendChild(lbl);
+
+      // Slot cell
+      const cell = document.createElement('div');
+      cell.className = 'slot-cell' + (m === 0 ? ' hour-line' : '');
+      cell.dataset.slot = s;
+      cell.style.gridRow = s + 1;
+      cell.style.gridColumn = 2;
+      grid.appendChild(cell);
+    }
+
+    // Render events as absolutely positioned blocks
+    renderEvents();
+    updateNowBar();
+  }
+
+  function renderEvents() {
+    // Remove old event elements
+    document.querySelectorAll('.event').forEach(e => e.remove());
+
+    const wrap = document.querySelector('.grid-wrap');
+
+    events.forEach(ev => {
+      const el = document.createElement('div');
+      el.className = 'event';
+      el.dataset.id = ev.id;
+
+      const top    = slotY(ev.start_slot);
+      const height = ev.span * SLOT_H - 2; // -2 for border
+
+      el.style.top    = top + 'px';
+      el.style.height = height + 'px';
+
+      // Show time range
+      const timeEl = document.createElement('div');
+      timeEl.className = 'event-time';
+      timeEl.textContent = `${fmt(ev.start_slot)} – ${fmt(ev.start_slot + ev.span)}`;
+      el.appendChild(timeEl);
+
+      if (ev.title) {
+        const t = document.createElement('div');
+        t.className = 'event-title';
+        t.textContent = ev.title;
+        el.appendChild(t);
+      }
+
+      if (ev.note && ev.span > 1) {
+        const n = document.createElement('div');
+        n.className = 'event-note';
+        n.textContent = ev.note;
+        el.appendChild(n);
+      }
+
+      el.addEventListener('click', e => {
+        e.stopPropagation();
+        openEdit(ev.id);
+      });
+
+      wrap.appendChild(el);
+    });
+  }
+
+  function updateNowBar() {
+    const bar = document.getElementById('now-bar');
+    if (dayOffset !== 0) { bar.style.display = 'none'; return; }
+    bar.style.display = 'block';
+    const frac = nowFraction();
+    bar.style.top = (frac * TOTAL * SLOT_H) + 'px';
+  }
+
+  // ── Drag to create ────────────────────────────────────────────────────
+
+  const grid = document.getElementById('grid');
+  const preview = document.getElementById('drag-preview');
+
+  function slotFromEvent(e) {
+    const rect = grid.getBoundingClientRect();
+    const y = (e.clientY || e.touches[0].clientY) - rect.top;
+    return Math.max(0, Math.min(TOTAL - 1, Math.floor(y / SLOT_H)));
+  }
+
+  function updatePreview(anchor, current) {
+    const lo = Math.min(anchor, current);
+    const hi = Math.max(anchor, current);
+    preview.style.display = 'block';
+    preview.style.top    = (slotY(lo)) + 'px';
+    preview.style.height = ((hi - lo + 1) * SLOT_H) + 'px';
+    preview.style.left   = '58px';
+    preview.style.right  = '0';
+  }
+
+  grid.addEventListener('mousedown', e => {
+    if (e.target.closest('.event')) return;
+    dragActive  = true;
+    dragAnchor  = slotFromEvent(e);
+    dragCurrent = dragAnchor;
+    updatePreview(dragAnchor, dragCurrent);
+  });
+
+  window.addEventListener('mousemove', e => {
+    if (!dragActive) return;
+    dragCurrent = slotFromEvent(e);
+    updatePreview(dragAnchor, dragCurrent);
+  });
+
+  window.addEventListener('mouseup', e => {
+    if (!dragActive) return;
+    dragActive = false;
+    preview.style.display = 'none';
+
+    const lo   = Math.min(dragAnchor, dragCurrent);
+    const hi   = Math.max(dragAnchor, dragCurrent);
+    const span = hi - lo + 1;
+
+    if (!overlaps(lo, span)) {
+      openCreate(lo, span);
+    }
+    dragAnchor = dragCurrent = null;
+  });
+
+  // Touch
+  grid.addEventListener('touchstart', e => {
+    if (e.target.closest('.event')) return;
+    dragActive  = true;
+    dragAnchor  = slotFromEvent(e);
+    dragCurrent = dragAnchor;
+    updatePreview(dragAnchor, dragCurrent);
+  }, { passive: true });
+
+  grid.addEventListener('touchmove', e => {
+    if (!dragActive) return;
+    dragCurrent = slotFromEvent(e);
+    updatePreview(dragAnchor, dragCurrent);
+  }, { passive: true });
+
+  grid.addEventListener('touchend', () => {
+    if (!dragActive) return;
+    dragActive = false;
+    preview.style.display = 'none';
+    const lo   = Math.min(dragAnchor, dragCurrent);
+    const hi   = Math.max(dragAnchor, dragCurrent);
+    const span = hi - lo + 1;
+    if (!overlaps(lo, span)) openCreate(lo, span);
+    dragAnchor = dragCurrent = null;
+  });
+
+  // ── Panel ─────────────────────────────────────────────────────────────
+
+  function openCreate(startSlot, span) {
+    editingId   = null;
+    pendingSlot = startSlot;
+    pendingSpan = span;
+    document.getElementById('p-title').value = '';
+    document.getElementById('p-note').value  = '';
+    document.getElementById('panel-meta').textContent =
+      `${fmt(startSlot)} – ${fmt(startSlot + span)}  (${span * 10} min)`;
+    document.getElementById('p-delete').style.display = 'none';
+    openPanel();
+  }
+
+  function openEdit(id) {
+    const ev = events.find(e => e.id === id);
+    if (!ev) return;
+    editingId = id;
+    document.getElementById('p-title').value = ev.title || '';
+    document.getElementById('p-note').value  = ev.note  || '';
+    document.getElementById('panel-meta').textContent =
+      `${fmt(ev.start_slot)} – ${fmt(ev.start_slot + ev.span)}  (${ev.span * 10} min)`;
+    document.getElementById('p-delete').style.display = '';
+    openPanel();
+  }
+
+  function openPanel() {
+    document.getElementById('panel').classList.add('open');
+    setTimeout(() => document.getElementById('p-title').focus(), 220);
+  }
+
+  function closePanel() {
+    document.getElementById('panel').classList.remove('open');
+    editingId = pendingSlot = pendingSpan = null;
+  }
+
+  document.getElementById('panel-close').addEventListener('click', closePanel);
+
+  document.getElementById('p-save').addEventListener('click', async () => {
+    const title = document.getElementById('p-title').value.trim();
+    const note  = document.getElementById('p-note').value.trim();
+
+    if (editingId !== null) {
+      await updateEvent(editingId, { title, note });
+      const ev = events.find(e => e.id === editingId);
+      if (ev) { ev.title = title; ev.note = note; }
+    } else {
+      const id = await createEvent(pendingSlot, pendingSpan, title, note);
+      events.push({ id, start_slot: pendingSlot, span: pendingSpan, title, note });
+    }
+
+    renderEvents();
+    closePanel();
+  });
+
+  document.getElementById('p-delete').addEventListener('click', async () => {
+    if (editingId === null) return;
+    await deleteEvent(editingId);
+    events = events.filter(e => e.id !== editingId);
+    renderEvents();
+    closePanel();
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closePanel();
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey))
+      document.getElementById('p-save').click();
+  });
+
+  // ── Day nav ───────────────────────────────────────────────────────────
+
+  async function changeDay(delta) {
+    dayOffset += delta;
+    renderDayLabel();
+    await loadDay();
+    renderGrid();
+  }
+
+  document.getElementById('prev-day').addEventListener('click', () => changeDay(-1));
+  document.getElementById('next-day').addEventListener('click', () => changeDay(1));
+
+  // ── Clock / auto-refresh ──────────────────────────────────────────────
+
+  function updateClock() {
+    document.getElementById('clock').textContent = new Date().toTimeString().slice(0, 8);
+    updateNowBar();
+  }
+
+  setInterval(updateClock, 1000);
+
+  // ── Init ─────────────────────────────────────────────────────────────
+
+  (async () => {
+    updateClock();
+    renderDayLabel();
+    await loadDay();
+    renderGrid();
+
+    // Scroll to current time
+    requestAnimationFrame(() => {
+      const y = nowFraction() * TOTAL * SLOT_H;
+      window.scrollTo({ top: y - window.innerHeight / 2, behavior: 'smooth' });
+    });
+  })();
+</script>
+</body>
+</html>
