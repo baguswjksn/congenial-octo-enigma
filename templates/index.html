@@ -284,6 +284,74 @@
   .btn.primary { color: var(--text); border-color: #404040; }
   .btn.danger:hover { color: #f55; border-color: #f55; }
 
+  /* ── Auth overlay ── */
+  .auth-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    flex-direction: column;
+    gap: 0;
+  }
+  .auth-overlay.hidden { display: none; }
+
+  .auth-box {
+    width: 100%;
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 0 20px;
+  }
+
+  .auth-title {
+    font-family: 'DM Mono', monospace;
+    font-weight: 300;
+    font-size: 15px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .auth-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    margin-top: -8px;
+    margin-bottom: 4px;
+  }
+
+  .auth-box input[type="password"] {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    padding: 10px 14px;
+    outline: none;
+    width: 100%;
+    letter-spacing: 0.05em;
+    transition: border-color 0.15s;
+  }
+  .auth-box input[type="password"]:focus { border-color: #404040; }
+
+  .auth-error {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: #f55;
+    letter-spacing: 0.05em;
+    min-height: 14px;
+  }
+
+  .auth-actions {
+    display: flex;
+    gap: 8px;
+  }
+
   /* hint */
   .hint {
     width: 100%;
@@ -297,6 +365,19 @@
 </style>
 </head>
 <body>
+
+<!-- Auth overlay -->
+<div class="auth-overlay" id="auth-overlay">
+  <div class="auth-box">
+    <div class="auth-title">Timeblock</div>
+    <div class="auth-sub" id="auth-sub">enter password</div>
+    <input type="password" id="auth-pw" placeholder="Password" autocomplete="current-password">
+    <div class="auth-error" id="auth-error"></div>
+    <div class="auth-actions">
+      <button class="btn primary" id="auth-submit">Unlock</button>
+    </div>
+  </div>
+</div>
 
 <header>
   <h1>Timeblock</h1>
@@ -332,6 +413,50 @@
 </div>
 
 <script>
+  // ── Auth ──────────────────────────────────────────────────────────────
+
+  async function checkAuth() {
+    const r = await fetch('/api/auth/status');
+    const j = await r.json();
+    if (j.authed) {
+      document.getElementById('auth-overlay').classList.add('hidden');
+      return true;
+    }
+    // Show overlay
+    if (!j.setup) {
+      document.getElementById('auth-sub').textContent = 'choose a password to get started';
+    }
+    document.getElementById('auth-overlay').classList.remove('hidden');
+    return false;
+  }
+
+  async function submitAuth() {
+    const pw = document.getElementById('auth-pw').value;
+    const errEl = document.getElementById('auth-error');
+    errEl.textContent = '';
+    if (!pw) { errEl.textContent = 'password required'; return; }
+
+    const r = await fetch('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pw })
+    });
+    const j = await r.json();
+    if (j.ok) {
+      document.getElementById('auth-overlay').classList.add('hidden');
+      document.getElementById('auth-pw').value = '';
+      initApp();
+    } else {
+      errEl.textContent = j.error || 'incorrect password';
+      document.getElementById('auth-pw').select();
+    }
+  }
+
+  document.getElementById('auth-submit').addEventListener('click', submitAuth);
+  document.getElementById('auth-pw').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitAuth();
+  });
+
   const TOTAL = 144;        // slots per day
   const SLOT_H = 32;        // px — must match --slot-h
   const GAP    = 1;         // px gap between rows (none here, rows are tight)
@@ -695,7 +820,7 @@
 
   // ── Init ─────────────────────────────────────────────────────────────
 
-  (async () => {
+  async function initApp() {
     updateClock();
     renderDayLabel();
     await loadDay();
@@ -706,6 +831,13 @@
       const y = nowFraction() * TOTAL * SLOT_H;
       window.scrollTo({ top: y - window.innerHeight / 2, behavior: 'smooth' });
     });
+  }
+
+  // ── Startup ───────────────────────────────────────────────────────────
+
+  (async () => {
+    const authed = await checkAuth();
+    if (authed) initApp();
   })();
 </script>
 </body>
