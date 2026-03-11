@@ -37,6 +37,16 @@ def init_db():
                 salt        TEXT    NOT NULL,
                 hash        TEXT    NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS crons (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                title       TEXT    NOT NULL DEFAULT '',
+                note        TEXT    NOT NULL DEFAULT '',
+                start_slot  INTEGER NOT NULL,
+                span        INTEGER NOT NULL DEFAULT 1,
+                days        TEXT    NOT NULL DEFAULT '0,1,2,3,4,5,6',
+                enabled     INTEGER NOT NULL DEFAULT 1
+            );
         """)
 
 def is_authenticated():
@@ -118,11 +128,39 @@ def require_auth():
 def get_day(date):
     err = require_auth()
     if err: return err
+    import datetime
     rows = get_db().execute(
         'SELECT id, start_slot, span, title, note FROM events WHERE date=? ORDER BY start_slot',
         (date,)
     ).fetchall()
-    return jsonify([dict(r) for r in rows])
+    result = [dict(r) for r in rows]
+
+    # Inject enabled cron events for this weekday
+    try:
+        d = datetime.date.fromisoformat(date)
+        weekday = d.weekday()  # Monday=0 … Sunday=6
+        # Convert to JS-style: Sunday=0 … Saturday=6
+        js_day = (weekday + 1) % 7
+    except ValueError:
+        return jsonify(result)
+
+    crons = get_db().execute(
+        "SELECT id, start_slot, span, title, note, days FROM crons WHERE enabled=1"
+    ).fetchall()
+    for c in crons:
+        active_days = [int(x) for x in c['days'].split(',') if x.strip()]
+        if js_day in active_days:
+            result.append({
+                'id': f'cron_{c["id"]}',
+                'start_slot': c['start_slot'],
+                'span': c['span'],
+                'title': c['title'],
+                'note': c['note'],
+                'is_cron': True
+            })
+
+    result.sort(key=lambda x: x['start_slot'])
+    return jsonify(result)
 
 @app.route('/api/event', methods=['POST'])
 def create_event():
@@ -159,6 +197,54 @@ def delete_event(eid):
     err = require_auth()
     if err: return err
     get_db().execute('DELETE FROM events WHERE id=?', (eid,))
+    get_db().commit()
+    return jsonify({'ok': True})
+
+@app.route('/api/crons', methods=['GET'])
+def list_crons():
+    err = require_auth()
+    if err: return err
+    rows = get_db().execute(
+        'SELECT id, title, note, start_slot, span, days, enabled FROM crons ORDER BY start_slot'
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+@app.route('/api/cron', methods=['POST'])
+def create_cron():
+    err = require_auth()
+    if err: return err
+    d = request.get_json()
+    db = get_db()
+    cur = db.execute(
+        'INSERT INTO crons(title, note, start_slot, span, days, enabled) VALUES(?,?,?,?,?,1)',
+        (d.get('title','').strip(), d.get('note','').strip(),
+         int(d['start_slot']), int(d.get('span', 1)),
+         d.get('days', '0,1,2,3,4,5,6'))
+    )
+    db.commit()
+    return jsonify({'ok': True, 'id': cur.lastrowid})
+
+@app.route('/api/cron/<int:cid>', methods=['PUT'])
+def update_cron(cid):
+    err = require_auth()
+    if err: return err
+    d = request.get_json()
+    db = get_db()
+    fields, vals = [], []
+    for col in ('title', 'note', 'start_slot', 'span', 'days', 'enabled'):
+        if col in d:
+            fields.append(f'{col}=?')
+            vals.append(d[col])
+    vals.append(cid)
+    db.execute(f'UPDATE crons SET {", ".join(fields)} WHERE id=?', vals)
+    db.commit()
+    return jsonify({'ok': True})
+
+@app.route('/api/cron/<int:cid>', methods=['DELETE'])
+def delete_cron(cid):
+    err = require_auth()
+    if err: return err
+    get_db().execute('DELETE FROM crons WHERE id=?', (cid,))
     get_db().commit()
     return jsonify({'ok': True})
 

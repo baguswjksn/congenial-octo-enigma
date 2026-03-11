@@ -362,6 +362,139 @@
     margin-bottom: 14px;
     letter-spacing: 0.04em;
   }
+
+  /* ── Cron Modal ── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 500;
+  }
+  .modal-overlay.hidden { display: none; }
+
+  .modal {
+    background: #111;
+    border: 1px solid var(--border);
+    width: 100%; max-width: 520px;
+    max-height: 88vh;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  .modal-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .modal-head span {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .modal-body {
+    flex: 1; overflow-y: auto;
+    padding: 14px 18px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+
+  .cron-list { display: flex; flex-direction: column; gap: 6px; }
+
+  .cron-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 2px solid #333;
+    padding: 10px 12px;
+    display: flex; align-items: center; gap: 10px;
+    cursor: pointer;
+    transition: border-color 0.12s;
+  }
+  .cron-item:hover { border-color: #444; border-left-color: #666; }
+  .cron-item.disabled { opacity: 0.4; }
+
+  .cron-toggle {
+    width: 28px; height: 16px;
+    background: #222; border: 1px solid #333; border-radius: 8px;
+    position: relative; cursor: pointer; flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .cron-toggle::after {
+    content: ''; position: absolute;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #555; top: 2px; left: 2px;
+    transition: left 0.15s, background 0.15s;
+  }
+  .cron-toggle.on { background: #1a2e1a; border-color: #2e5a2e; }
+  .cron-toggle.on::after { left: 14px; background: #4a9a4a; }
+
+  .cron-info { flex: 1; min-width: 0; }
+  .cron-title { font-size: 12px; font-weight: 500; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cron-meta { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted);
+    margin-top: 2px; }
+
+  .cron-edit-btn {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.06em;
+    padding: 4px 10px; cursor: pointer;
+    transition: color 0.15s, border-color 0.15s; flex-shrink: 0;
+  }
+  .cron-edit-btn:hover { color: var(--text); border-color: #444; }
+
+  .cron-form {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 14px 14px 10px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .cron-form.hidden { display: none; }
+
+  .cron-form input, .cron-form textarea {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif; font-size: 13px;
+    padding: 8px 10px; outline: none; resize: none; width: 100%;
+    transition: border-color 0.15s;
+  }
+  .cron-form input:focus, .cron-form textarea:focus { border-color: #404040; }
+  .cron-form input::placeholder, .cron-form textarea::placeholder { color: #3a3a3a; }
+
+  .cron-form-row { display: flex; gap: 8px; }
+  .cron-form-row input { flex: 1; }
+
+  .day-picker {
+    display: flex; gap: 4px; flex-wrap: wrap;
+  }
+  .day-pill {
+    background: none; border: 1px solid var(--border);
+    color: var(--muted); font-family: 'DM Mono', monospace;
+    font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 4px 8px; cursor: pointer;
+    transition: color 0.12s, border-color 0.12s, background 0.12s;
+  }
+  .day-pill.active {
+    color: var(--text); border-color: #505050; background: #1c1c1c;
+  }
+
+  .cron-form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 2px; }
+  .empty-crons {
+    font-family: 'DM Mono', monospace; font-size: 10px;
+    color: #333; text-align: center; padding: 20px 0; letter-spacing: 0.06em;
+  }
+
+  .event.is-cron {
+    border-left-color: #2e5a2e;
+    background: #0f1f0f;
+    border-color: #1e3a1e;
+  }
+  .event.is-cron:hover {
+    border-color: #2e5a2e;
+    border-left-color: #4a9a4a;
+    background: #121f12;
+  }
 </style>
 </head>
 <body>
@@ -381,7 +514,10 @@
 
 <header>
   <h1>Timeblock</h1>
-  <span id="clock">--:--:--</span>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <button class="btn" id="open-crons" style="font-size:10px;padding:5px 12px;letter-spacing:0.08em;">↻ recurring</button>
+    <span id="clock">--:--:--</span>
+  </div>
 </header>
 
 <div class="day-nav">
@@ -396,6 +532,48 @@
   <div class="grid" id="grid"></div>
   <div class="drag-preview" id="drag-preview"></div>
   <div class="now-bar" id="now-bar"></div>
+</div>
+
+<!-- Cron / Recurring modal -->
+<div class="modal-overlay hidden" id="cron-overlay">
+  <div class="modal">
+    <div class="modal-head">
+      <span>Recurring Events</span>
+      <button class="panel-close" id="cron-close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="cron-list" id="cron-list"></div>
+      <div id="empty-crons" class="empty-crons hidden">no recurring events yet</div>
+
+      <!-- Add / Edit form -->
+      <div class="cron-form hidden" id="cron-form">
+        <input type="text" id="cf-title" placeholder="Event title" maxlength="100" autocomplete="off">
+        <textarea id="cf-note" placeholder="Notes…" rows="2"></textarea>
+        <div class="cron-form-row">
+          <input type="text" id="cf-start" placeholder="Start  e.g. 09:00" maxlength="5" autocomplete="off">
+          <input type="text" id="cf-end"   placeholder="End    e.g. 10:00" maxlength="5" autocomplete="off">
+        </div>
+        <div class="day-picker" id="cf-days">
+          <button class="day-pill active" data-day="0">Sun</button>
+          <button class="day-pill active" data-day="1">Mon</button>
+          <button class="day-pill active" data-day="2">Tue</button>
+          <button class="day-pill active" data-day="3">Wed</button>
+          <button class="day-pill active" data-day="4">Thu</button>
+          <button class="day-pill active" data-day="5">Fri</button>
+          <button class="day-pill active" data-day="6">Sat</button>
+        </div>
+        <div class="cron-form-actions">
+          <button class="btn danger" id="cf-delete" style="display:none">Delete</button>
+          <button class="btn" id="cf-cancel">Cancel</button>
+          <button class="btn primary" id="cf-save">Save</button>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:center;margin-top:4px;">
+        <button class="btn" id="cf-new">+ add recurring</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Edit / Create panel -->
@@ -479,7 +657,10 @@
   function dateStr(off = dayOffset) {
     const d = new Date();
     d.setDate(d.getDate() + off);
-    return d.toISOString().slice(0, 10);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
   }
 
   function slotToHM(s) {
@@ -606,7 +787,7 @@
 
     events.forEach(ev => {
       const el = document.createElement('div');
-      el.className = 'event';
+      el.className = 'event' + (ev.is_cron ? ' is-cron' : '');
       el.dataset.id = ev.id;
 
       const top    = slotY(ev.start_slot);
@@ -637,6 +818,7 @@
 
       el.addEventListener('click', e => {
         e.stopPropagation();
+        if (ev.is_cron) return; // cron events are read-only from day view
         openEdit(ev.id);
       });
 
@@ -833,7 +1015,181 @@
     });
   }
 
-  // ── Startup ───────────────────────────────────────────────────────────
+  // ── Cron / Recurring ─────────────────────────────────────────────────
+
+  const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  let crons = [];
+  let editingCronId = null;
+
+  function timeToSlot(str) {
+    const [h, m] = str.split(':').map(Number);
+    if (isNaN(h) || isNaN(m)) return null;
+    return Math.round((h * 60 + m) / 10);
+  }
+
+  function slotToTime(s) {
+    const { h, m } = slotToHM(s);
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  }
+
+  function cronDayLabel(days) {
+    const ds = days.split(',').map(Number);
+    if (ds.length === 7) return 'every day';
+    if (JSON.stringify(ds) === JSON.stringify([1,2,3,4,5])) return 'weekdays';
+    if (JSON.stringify(ds) === JSON.stringify([0,6])) return 'weekends';
+    return ds.map(d => DAY_NAMES[d]).join(', ');
+  }
+
+  async function loadCrons() {
+    const r = await fetch('/api/crons');
+    crons = await r.json();
+  }
+
+  function renderCronList() {
+    const list = document.getElementById('cron-list');
+    const empty = document.getElementById('empty-crons');
+    list.innerHTML = '';
+    if (crons.length === 0) {
+      empty.classList.remove('hidden');
+    } else {
+      empty.classList.add('hidden');
+      crons.forEach(c => {
+        const item = document.createElement('div');
+        item.className = 'cron-item' + (c.enabled ? '' : ' disabled');
+
+        const tog = document.createElement('div');
+        tog.className = 'cron-toggle' + (c.enabled ? ' on' : '');
+        tog.title = c.enabled ? 'Disable' : 'Enable';
+        tog.addEventListener('click', async e => {
+          e.stopPropagation();
+          await fetch(`/api/cron/${c.id}`, {
+            method: 'PUT', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ enabled: c.enabled ? 0 : 1 })
+          });
+          await loadCrons();
+          renderCronList();
+          await loadDay(); renderEvents();
+        });
+
+        const info = document.createElement('div');
+        info.className = 'cron-info';
+        info.innerHTML = `<div class="cron-title">${c.title || '(untitled)'}</div>
+          <div class="cron-meta">${slotToTime(c.start_slot)} – ${slotToTime(c.start_slot + c.span)} · ${cronDayLabel(c.days)}</div>`;
+
+        const editBtn = document.createElement('button');
+        editBtn.className = 'cron-edit-btn';
+        editBtn.textContent = 'edit';
+        editBtn.addEventListener('click', e => { e.stopPropagation(); openCronForm(c.id); });
+
+        item.appendChild(tog);
+        item.appendChild(info);
+        item.appendChild(editBtn);
+        list.appendChild(item);
+      });
+    }
+  }
+
+  function openCronForm(id = null) {
+    editingCronId = id;
+    const form = document.getElementById('cron-form');
+    form.classList.remove('hidden');
+
+    if (id !== null) {
+      const c = crons.find(x => x.id === id);
+      document.getElementById('cf-title').value = c.title;
+      document.getElementById('cf-note').value  = c.note;
+      document.getElementById('cf-start').value = slotToTime(c.start_slot);
+      document.getElementById('cf-end').value   = slotToTime(c.start_slot + c.span);
+      const activeDays = c.days.split(',').map(Number);
+      document.querySelectorAll('#cf-days .day-pill').forEach(p => {
+        p.classList.toggle('active', activeDays.includes(parseInt(p.dataset.day)));
+      });
+      document.getElementById('cf-delete').style.display = '';
+    } else {
+      document.getElementById('cf-title').value = '';
+      document.getElementById('cf-note').value  = '';
+      document.getElementById('cf-start').value = '';
+      document.getElementById('cf-end').value   = '';
+      document.querySelectorAll('#cf-days .day-pill').forEach(p => p.classList.add('active'));
+      document.getElementById('cf-delete').style.display = 'none';
+    }
+    document.getElementById('cf-title').focus();
+  }
+
+  function closeCronForm() {
+    document.getElementById('cron-form').classList.add('hidden');
+    editingCronId = null;
+  }
+
+  async function openCronModal() {
+    await loadCrons();
+    renderCronList();
+    closeCronForm();
+    document.getElementById('cron-overlay').classList.remove('hidden');
+  }
+
+  document.getElementById('cron-close').addEventListener('click', () => {
+    document.getElementById('cron-overlay').classList.add('hidden');
+  });
+
+  document.getElementById('cron-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('cron-overlay')) {
+      document.getElementById('cron-overlay').classList.add('hidden');
+    }
+  });
+
+  document.getElementById('cf-new').addEventListener('click', () => openCronForm(null));
+  document.getElementById('cf-cancel').addEventListener('click', closeCronForm);
+
+  document.querySelectorAll('#cf-days .day-pill').forEach(p => {
+    p.addEventListener('click', () => p.classList.toggle('active'));
+  });
+
+  document.getElementById('cf-save').addEventListener('click', async () => {
+    const title = document.getElementById('cf-title').value.trim();
+    const note  = document.getElementById('cf-note').value.trim();
+    const startSlot = timeToSlot(document.getElementById('cf-start').value);
+    const endSlot   = timeToSlot(document.getElementById('cf-end').value);
+    if (startSlot === null || endSlot === null || endSlot <= startSlot) {
+      alert('Please enter valid start and end times (e.g. 09:00 / 10:00)');
+      return;
+    }
+    const days = [...document.querySelectorAll('#cf-days .day-pill.active')]
+      .map(p => p.dataset.day).join(',');
+    if (!days) { alert('Select at least one day'); return; }
+
+    const payload = { title, note, start_slot: startSlot, span: endSlot - startSlot, days };
+
+    if (editingCronId !== null) {
+      await fetch(`/api/cron/${editingCronId}`, {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+    } else {
+      await fetch('/api/cron', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+    }
+    await loadCrons();
+    renderCronList();
+    closeCronForm();
+    await loadDay(); renderEvents();
+  });
+
+  document.getElementById('cf-delete').addEventListener('click', async () => {
+    if (editingCronId === null) return;
+    if (!confirm('Delete this recurring event?')) return;
+    await fetch(`/api/cron/${editingCronId}`, { method: 'DELETE' });
+    await loadCrons();
+    renderCronList();
+    closeCronForm();
+    await loadDay(); renderEvents();
+  });
+
+
+
+  document.getElementById('open-crons').addEventListener('click', openCronModal);
 
   (async () => {
     const authed = await checkAuth();
